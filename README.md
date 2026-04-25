@@ -100,6 +100,15 @@ Interview Questions:
 - Learning roadmap generation
 - Multi-job comparison
 - Advanced analytics dashboard
+# Screenshots
+
+<img width="1360" height="711" alt="Screenshot 2026-04-25 at 10 28 14 PM" src="https://github.com/user-attachments/assets/0eef2211-4008-4eea-9bff-c04b2b9c9643" />
+
+<img width="1407" height="754" alt="Screenshot 2026-04-25 at 10 27 22 PM" src="https://github.com/user-attachments/assets/e465a46d-1d4d-4150-8c90-a7a12286edaa" />
+
+
+
+
 
 ## Author
 
