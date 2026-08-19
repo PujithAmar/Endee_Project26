@@ -47,4 +47,6 @@ _singleton = EmbeddingService()
 
 
 def get_embedder() -> EmbeddingService:
+    _singleton._load()
     return _singleton
+

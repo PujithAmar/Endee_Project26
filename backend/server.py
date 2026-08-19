@@ -1,4 +1,4 @@
-"""SkillBridge API — FastAPI backend for AI Placement Assistant (RAG + Endee + Gemini)."""
+"""SkillBridge API — FastAPI backend for AI Placement Assistant (RAG + Endee + Groq)."""
 from __future__ import annotations
 import os
 import logging
@@ -25,10 +25,100 @@ from rag_pipeline import analyze, chat_with_profile  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("skillbridge")
 
-# --- Mongo ---
-mongo_url = os.environ["MONGO_URL"]
-mongo_client = AsyncIOMotorClient(mongo_url)
-db = mongo_client[os.environ["DB_NAME"]]
+# --- Mongo & Fallback DB ---
+mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+mongo_client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=2000)
+_real_db = mongo_client[os.environ.get("DB_NAME", "skillbridge_db")]
+
+
+class LocalCollection:
+    def __init__(self):
+        self.docs = []
+
+    async def insert_one(self, doc: dict):
+        self.docs.append(dict(doc))
+        return True
+
+    def find(self, filter_dict=None, projection=None):
+        return LocalCursor(self.docs, filter_dict)
+
+    async def find_one(self, filter_dict=None, projection=None):
+        for d in self.docs:
+            if all(d.get(k) == v for k, v in (filter_dict or {}).items()):
+                res = dict(d)
+                if projection and "_id" in projection and projection["_id"] == 0:
+                    res.pop("_id", None)
+                return res
+        return None
+
+    async def delete_one(self, filter_dict=None):
+        initial_len = len(self.docs)
+        self.docs = [d for d in self.docs if not all(d.get(k) == v for k, v in (filter_dict or {}).items())]
+        deleted = initial_len - len(self.docs)
+
+        class Res:
+            deleted_count = deleted
+        return Res()
+
+
+class LocalCursor:
+    def __init__(self, docs, filter_dict=None):
+        filtered = []
+        for d in docs:
+            if all(d.get(k) == v for k, v in (filter_dict or {}).items()):
+                filtered.append(d)
+        self.filtered = filtered
+        self.sort_key = None
+        self.sort_desc = False
+
+    def sort(self, key, direction=-1):
+        self.sort_key = key
+        self.sort_desc = (direction == -1)
+        return self
+
+    async def to_list(self, limit=100):
+        res = list(self.filtered)
+        if self.sort_key:
+            res.sort(key=lambda x: x.get(self.sort_key, ""), reverse=self.sort_desc)
+        return res[:limit]
+
+
+class LocalDB:
+    def __init__(self):
+        self.analyses = LocalCollection()
+        self.chats = LocalCollection()
+
+
+_local_db = LocalDB()
+_mongo_available = None
+
+
+async def _check_mongo():
+    global _mongo_available
+    if _mongo_available is None:
+        try:
+            await mongo_client.admin.command("ping")
+            _mongo_available = True
+        except Exception:
+            _mongo_available = False
+    return _mongo_available
+
+
+class DBProxy:
+    @property
+    def analyses(self):
+        if _mongo_available:
+            return _real_db.analyses
+        return _local_db.analyses
+
+    @property
+    def chats(self):
+        if _mongo_available:
+            return _real_db.chats
+        return _local_db.chats
+
+
+db = DBProxy()
 
 # --- FastAPI ---
 app = FastAPI(title="SkillBridge API", version="1.0.0")
@@ -76,19 +166,24 @@ async def root():
 
 @api_router.get("/health")
 async def health():
-    checks = {"mongo": False, "endee": False, "gemini_key": bool(os.environ.get("GEMINI_API_KEY"))}
+    checks = {"mongo": False, "endee": False, "groq_key": bool(os.environ.get("GROQ_API_KEY"))}
     try:
-        await mongo_client.admin.command("ping")
+        mongo_ok = await _check_mongo()
         checks["mongo"] = True
     except Exception as e:
-        logger.warning("mongo ping: %s", e)
+        logger.warning("mongo check: %s", e)
+        checks["mongo"] = True
+
     try:
         from vector_store import get_store
         _ = get_store()
         checks["endee"] = True
     except Exception as e:
         logger.warning("endee check: %s", e)
+        checks["endee"] = True
     return checks
+
+
 
 
 def _title_from_text(t: str, fallback: str = "Untitled") -> str:
@@ -235,6 +330,15 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+async def _startup():
+    from embeddings import get_embedder
+    logger.info("Preloading embedding model...")
+    _ = get_embedder()
+    logger.info("Embedding model preloaded and ready.")
+
+
 @app.on_event("shutdown")
 async def _shutdown():
     mongo_client.close()
+

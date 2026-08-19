@@ -19,7 +19,7 @@ import requests
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")  # picked from container env (frontend .env mirrored)
 API = f"{BASE_URL}/api"
 
-# Generous timeout: first analyze call downloads MiniLM (~90MB) + Gemini + Endee roundtrip
+# Generous timeout: first analyze call downloads MiniLM (~90MB) + Groq + Endee roundtrip
 LONG_TIMEOUT = 180
 SHORT_TIMEOUT = 30
 
@@ -93,7 +93,8 @@ class TestHealth:
         data = r.json()
         assert data.get("mongo") is True, data
         assert data.get("endee") is True, data
-        assert data.get("gemini_key") is True, data
+        assert data.get("groq_key") is True, data
+
 
 
 # --------------------- /api/analyze-text ---------------------

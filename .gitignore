@@ -31,9 +31,12 @@ dist/
 dist
 
 # Environment files (comprehensive coverage)
-
+.env
+*.env
+.env.*
 *token.json*
 *credentials.json*
+
 
 # Logs and debug files
 npm-debug.log*
@@ -81,3 +84,4 @@ memory/test_credentials.md
 # Mobile development
 android-sdk/backend/venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.dylib
 backend/venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.dylib
+

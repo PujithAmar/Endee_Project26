@@ -2,7 +2,7 @@
 
 ## Original Problem Statement
 Build an AI placement assistant that takes Resume + Job Description and uses a custom
-RAG pipeline with a vector DB (Endee) + Gemini to produce: skill-gap analysis, match
+RAG pipeline with a vector DB (Endee) + Groq to produce: skill-gap analysis, match
 score, resume suggestions, and tailored interview questions.
 
 ## User Personas
@@ -24,17 +24,17 @@ Resume (PDF) + Job Description
        |
   Retrieve top-K (JD↔resume both directions)
        |
-  Gemini 3 Flash Preview (fallback: 2.5-flash) — structured JSON
+  Groq llama-3.3-70b-versatile (fallback: llama-3.1-8b-instant) — structured JSON
        |
   MongoDB persistence (analyses, chats)
 ```
 
 ### Tech Stack
-- **Backend**: FastAPI, Motor (async Mongo), emergentintegrations (Gemini)
+- **Backend**: FastAPI, Motor (async Mongo), Groq API (`groq`)
 - **Frontend**: React + Tailwind + shadcn + sonner, Geist / Instrument Serif fonts
 - **Embeddings**: sentence-transformers `all-MiniLM-L6-v2` (384-dim, local, free)
 - **Vector DB**: Endee Serverless Cloud
-- **LLM**: Gemini 3 Flash Preview (user-provided key) with 2.5-flash fallback
+- **LLM**: Groq `llama-3.3-70b-versatile` with `llama-3.1-8b-instant` fallback
 - **PDF**: pdfplumber
 - **DB**: MongoDB
 
@@ -47,13 +47,13 @@ Resume (PDF) + Job Description
 6. Dark + minimal + professional UI, #0E1117 bg / #00ADB5 teal
 
 ## What's Been Implemented (Apr 22, 2026)
-- `GET  /api/health` — mongo + endee + gemini probes
+- `GET  /api/health` — mongo + endee + groq probes
 - `POST /api/analyze` — PDF upload OR form text field
 - `POST /api/analyze-text` — JSON variant
 - `POST /api/chat`, `GET /api/chat/{session_id}`
 - `GET  /api/history`, `GET /api/history/{id}`, `DELETE /api/history/{id}`
-- RAG pipeline (`rag_pipeline.py`): chunk → embed → upsert → retrieve → Gemini
-- LLM fallback chain: `gemini-3-flash-preview` → `gemini-2.5-flash` with 503 retry
+- RAG pipeline (`rag_pipeline.py`): chunk → embed → upsert → retrieve → Groq
+- LLM fallback chain: `llama-3.3-70b-versatile` → `llama-3.1-8b-instant` with retry
 - Frontend pages: Analyzer, History, Chat; components: ResumeUpload (PDF dropzone + paste mode), JobDescriptionInput, ScoreRing (animated SVG), AnalysisResults (score, missing, strengths, suggestions, learning path, interview Qs with tabs)
 - Toast system, responsive layout, animated entrance, grain + aurora background
 - Tested: 10/10 backend tests passing (testing_agent_v3 iteration_1)
@@ -83,9 +83,9 @@ Resume (PDF) + Job Description
 - [ ] Pagination for history
 
 ## Environment
-- `/app/backend/.env` — MONGO_URL, DB_NAME, GEMINI_API_KEY, ENDEE_TOKEN, ENDEE_INDEX_NAME
+- `/app/backend/.env` — MONGO_URL, DB_NAME, GROQ_API_KEY, ENDEE_TOKEN, ENDEE_INDEX_NAME
 - Endee index `skillbridge` (384-dim, cosine, INT8) is created on first run
 
 ## Known Limitations
 - Sentence-transformers model downloads ~90MB on first request (one-time)
-- Gemini 3 Flash Preview occasionally returns 503 under high demand — handled via fallback to 2.5-flash
+- Groq API rate limits handling via fallback chain to `llama-3.1-8b-instant`

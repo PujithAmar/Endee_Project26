@@ -3,21 +3,17 @@ import os
 import json
 import re
 import logging
-import uuid
 from typing import Optional
-
-from google import genai
-
-client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 logger = logging.getLogger(__name__)
 
-# Model fallback
+# Active Groq Models (Updated for current API support)
 MODEL_FALLBACKS = [
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite"
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.6-27b",
+    "groq/compound",
+    "openai/gpt-oss-20b",
 ]
-
 
 SYSTEM_PROMPT = """You are SkillBridge, an expert AI placement assistant.
 You analyse a candidate's resume against a job description using retrieved context
@@ -39,24 +35,76 @@ def _strip_fences(text: str) -> str:
     return text
 
 
-def _call_gemini(prompt: str, system_message: str) -> str:
+def _get_groq_client():
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return None
+    try:
+        from groq import Groq
+        return Groq(api_key=api_key)
+    except ImportError:
+        return None
+
+
+def _call_groq(prompt: str, system_message: str, json_mode: bool = False) -> str:
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY environment variable is missing")
+
+    client = _get_groq_client()
     last_err = None
 
     for model in MODEL_FALLBACKS:
         try:
-            response = client.models.generate_content(
-                model=model,
-                contents=f"{system_message}\n\n{prompt}"
-            )
+            if client is not None:
+                kwargs = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.2,
+                }
+                if json_mode:
+                    kwargs["response_format"] = {"type": "json_object"}
 
-            if response.text:
-                return response.text
+                completion = client.chat.completions.create(**kwargs)
+                content = completion.choices[0].message.content
+                if content:
+                    return content
+            else:
+                import requests
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                }
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.2,
+                }
+                if json_mode:
+                    payload["response_format"] = {"type": "json_object"}
 
+                res = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=45,
+                )
+                res.raise_for_status()
+                data = res.json()
+                content = data["choices"][0]["message"]["content"]
+                if content:
+                    return content
         except Exception as e:
-            logger.warning(f"{model} failed: {e}")
+            logger.warning(f"Groq model {model} failed: {e}")
             last_err = e
 
-    raise last_err or RuntimeError("All Gemini models failed")
+    raise last_err or RuntimeError("All Groq models failed")
 
 
 async def run_analysis(
@@ -96,7 +144,7 @@ Return STRICT JSON:
 }}
 """
 
-    resp = _call_gemini(prompt, SYSTEM_PROMPT)
+    resp = _call_groq(prompt, SYSTEM_PROMPT, json_mode=True)
     raw = _strip_fences(resp.strip())
 
     try:
@@ -135,5 +183,5 @@ Question:
 {question}
 """
 
-    resp = _call_gemini(prompt, sys_msg)
+    resp = _call_groq(prompt, sys_msg, json_mode=False)
     return resp.strip()

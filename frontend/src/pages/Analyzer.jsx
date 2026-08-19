@@ -12,7 +12,7 @@ const steps = [
   "Chunking & embedding (MiniLM-L6-v2)…",
   "Indexing in Endee vector DB…",
   "Retrieving top-K relevant context…",
-  "Asking Gemini 3 for analysis…",
+  "Asking Groq for analysis…",
 ];
 
 export default function Analyzer() {
@@ -81,7 +81,7 @@ export default function Analyzer() {
       {/* Hero */}
       <div className="max-w-3xl fade-up">
         <div className="inline-flex items-center gap-2 chip teal mb-5">
-          <Sparkles size={12} /> RAG · Endee · Gemini 3
+          <Sparkles size={12} /> RAG · Endee · Groq
         </div>
         <h1 className="text-4xl md:text-6xl font-semibold tracking-[-0.03em] leading-[1.02]">
           Land roles you <span className="serif">actually</span> fit<br />
@@ -166,7 +166,7 @@ function FeatureStrip() {
     { n: "01", t: "Chunk + Embed", d: "Your docs split into 300-token chunks, encoded with all-MiniLM-L6-v2." },
     { n: "02", t: "Endee Vector Store", d: "384-dim vectors indexed with HNSW + cosine in Endee Serverless." },
     { n: "03", t: "Retrieve", d: "Top-K JD↔resume chunks retrieved for cross-grounded context." },
-    { n: "04", t: "Gemini 3", d: "Grounded prompt → match score, gaps, suggestions, interview Qs." },
+    { n: "04", t: "Groq (Llama 3.3)", d: "Grounded prompt → match score, gaps, suggestions, interview Qs." },
   ];
   return (
     <div className="mt-4">
